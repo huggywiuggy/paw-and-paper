@@ -1,5 +1,5 @@
-const serverModel = require('../models/serverSchema');
-const profileModel = require('../models/profileSchema');
+const serverModel = require('../models/serverModel');
+const profileModel = require('../models/profileModel');
 const config = require('../config.json');
 
 module.exports = {
@@ -13,44 +13,24 @@ module.exports = {
 		// eslint-disable-next-line no-unused-vars
 		for (const [guild_key, guild] of client.guilds.cache) {
 
-			let serverData = await serverModel
-				.findOne({
-					serverId: guild.id,
-				})
-				.catch((error) => {
-					console.error(error);
-				});
+			const serverData = await serverModel.findOne({
+				serverId: guild.id,
+			});
 
 			if (!serverData) {
 
 				return;
 			}
 
-			serverData = await serverModel
-				.findOneAndUpdate(
-					{ serverId: guild.id },
-					{ $set: { activeUsersArray: [] } },
-					{ new: true },
-				)
-				.catch(async (error) => {
-					console.error(error);
-				});
-
-			for (const [account_id, account] of serverData.accountsToDelete) {
+			// eslint-disable-next-line no-unused-vars
+			for (const [account_id, account] of Object.entries(serverData.accountsToDelete)) {
 
 				setTimeout(async () => {
 
-					await profileModel
-						.findOneAndDelete({
-							userId: account.userId,
-							serverId: guild.id,
-						})
-						.then((value) => {
-							console.log('Deleted User: ' + value);
-						})
-						.catch((error) => {
-							console.error(error);
-						});
+					await profileModel.findOneAndDelete({
+						userId: account.userId,
+						serverId: guild.id,
+					});
 
 					await serverData.accountsToDelete.delete(account_id);
 					await serverData.save();
@@ -69,7 +49,9 @@ module.exports = {
 							components: [],
 						})
 						.catch((error) => {
-							console.error(error);
+							if (error.httpStatus !== 404) {
+								throw new Error(error);
+							}
 						});
 				}, new Date().getTime() - account.deletionTimestamp);
 			}

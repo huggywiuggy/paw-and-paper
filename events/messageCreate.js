@@ -1,19 +1,19 @@
 const config = require('../config.json');
-const profileModel = require('../models/profileSchema');
-const serverModel = require('../models/serverSchema');
+const profileModel = require('../models/profileModel');
+const serverModel = require('../models/serverModel');
 const errorHandling = require('../utils/errorHandling');
-const arrays = require('../utils/arrays');
+const maps = require('../utils/maps');
 const rest = require('../commands/general/rest');
 let lastMessageEpochTime = 0;
 const automaticRestingTimeoutArray = new Array();
 const automaticCooldownTimeoutArray = new Array();
 const usersActiveCommandsAmountMap = new Map();
-const serversActiveUsersCooldownTimeoutArray = new Array();
 
 module.exports = {
 	name: 'messageCreate',
 	once: false,
 	async execute(client, message) {
+
 		const prefix = config.prefix;
 
 		if (!message.content.toLowerCase().startsWith(prefix) || message.author.bot || message.channel.type === 'dm') {
@@ -21,106 +21,123 @@ module.exports = {
 			return;
 		}
 
-		let profileData = await profileModel
-			.findOne({
-				userId: message.author.id,
-				serverId: message.guild.id,
-			}).catch(async (error) => {
-				return await errorHandling.output(message, error);
-			});
+		let profileData = await profileModel.findOne({
+			userId: message.author.id,
+			serverId: message.guild.id,
+		});
 
-		const species = arrays.species(profileData);
-
-		let serverData = await serverModel
-			.findOne({
-				serverId: message.guild.id,
-			})
-			.catch(async (error) => {
-				return await errorHandling.output(message, error);
-			});
+		let serverData = await serverModel.findOne({
+			serverId: message.guild.id,
+		});
 
 		if (!serverData) {
+
+			const serverInventoryObject = {
+				commonPlants: {},
+				uncommonPlants: {},
+				rarePlants: {},
+				meat: {},
+			};
+
+			for (const [commonPlantName] of maps.commonPlantMap) {
+
+				serverInventoryObject.commonPlants[commonPlantName] = 0;
+			}
+
+			for (const [uncommonPlantName] of maps.uncommonPlantMap) {
+
+				serverInventoryObject.uncommonPlants[uncommonPlantName] = 0;
+			}
+
+			for (const [rarePlantName] of maps.rarePlantMap) {
+
+				serverInventoryObject.rarePlants[rarePlantName] = 0;
+			}
+
+			for (const [speciesName] of maps.speciesMap) {
+
+				serverInventoryObject.meat[speciesName] = 0;
+			}
 
 			serverData = await serverModel.create({
 				serverId: message.guild.id,
 				name: message.guild.name,
-				commonPlantsArray: Array(arrays.commonPlantNamesArray.length).fill(0),
-				uncommonPlantsArray: Array(arrays.uncommonPlantNamesArray.length).fill(0),
-				rarePlantsArray: Array(arrays.rarePlantNamesArray.length).fill(0),
-				meatArray: Array(species.nameArray.length).fill(0),
-			}).catch(async (error) => {
-				return await errorHandling.output(message, error);
+				inventoryObject: serverInventoryObject,
+				accountsToDelete: {},
+				activeUsersArray: [],
 			});
-
-			await serverData
-				.save()
-				.catch(async (error) => {
-					return await errorHandling.output(message, error);
-				});
 		}
 
-		if (species.nameArray.length > serverData.meatArray.length) {
+		if (maps.speciesMap.size > Object.keys(serverData.inventoryObject.meat).length) {
 
-			const serverDataMeatArray = [...serverData.meatArray].concat(new Array(species.nameArray.length - serverData.meatArray.length).fill(0));
+			const serverMeatObject = { ...serverData.inventoryObject.meat };
 
-			console.log(`\x1b[32m\x1b[0m${message.guild.name} (${message.guild.id}): meatArray changed from \x1b[33m${serverData.meatArray} \x1b[0mto \x1b[33m${serverDataMeatArray} \x1b[0mthrough \x1b[32m${message.author.tag} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-			serverData = await serverModel
-				.findOneAndUpdate(
-					{ serverId: message.guild.id },
-					{ $set: { meatArray: serverDataMeatArray } },
-					{ new: true },
-				)
-				.catch(async (error) => {
-					return await errorHandling.output(message, error);
-				});
+			for (const [speciesName] of maps.speciesMap) {
+
+				if (speciesName in serverMeatObject) {
+
+					serverMeatObject[speciesName] = 0;
+				}
+			}
+
+			serverData = await serverModel.findOneAndUpdate(
+				{ serverId: message.guild.id },
+				{ $set: { 'inventoryObject.meat': serverMeatObject } },
+			);
 		}
 
-		if (arrays.commonPlantNamesArray.length > serverData.commonPlantsArray.length) {
+		if (maps.commonPlantMap.size > Object.keys(serverData.inventoryObject.commonPlants).length) {
 
-			const serverDataCommonPlantsArray = [...serverData.commonPlantsArray].concat(new Array(arrays.commonPlantNamesArray.length - serverData.commonPlantsArray.length).fill(0));
+			const serverCommonPlantMap = new Map(JSON.parse(JSON.stringify([...serverData.inventoryObject.commonPlants])));
 
-			console.log(`\x1b[32m\x1b[0m${message.guild.name} (${message.guild.id}): commonPlantsArray changed from \x1b[33m${serverData.commonPlantsArray} \x1b[0mto \x1b[33m${serverDataCommonPlantsArray} \x1b[0mthrough \x1b[32m${message.author.tag} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-			serverData = await serverModel
-				.findOneAndUpdate(
-					{ serverId: message.guild.id },
-					{ $set: { commonPlantsArray: serverDataCommonPlantsArray } },
-					{ new: true },
-				)
-				.catch(async (error) => {
-					return await errorHandling.output(message, error);
-				});
+			for (const [speciesName] of maps.commonPlantMap) {
+
+				if (!serverCommonPlantMap.has(speciesName)) {
+
+					serverCommonPlantMap.set(speciesName, 0);
+				}
+			}
+
+			serverData = await serverModel.findOneAndUpdate(
+				{ serverId: message.guild.id },
+				{ $set: { 'inventoryObject.commonPlants': serverCommonPlantMap } },
+			);
 		}
 
-		if (arrays.uncommonPlantNamesArray.length > serverData.uncommonPlantsArray.length) {
+		if (maps.uncommonPlantMap.size > Object.keys(serverData.inventoryObject.uncommonPlants).length) {
 
-			const serverDataUncommonPlantsArray = [...serverData.uncommonPlantsArray].concat(new Array(arrays.uncommonPlantNamesArray.length - serverData.uncommonPlantsArray.length).fill(0));
+			const serverUncommonPlantMap = new Map(JSON.parse(JSON.stringify([...serverData.inventoryObject.uncommonPlants])));
 
-			console.log(`\x1b[32m\x1b[0m${message.guild.name} (${message.guild.id}): uncommonPlantsArray changed from \x1b[33m${serverData.uncommonPlantsArray} \x1b[0mto \x1b[33m${serverDataUncommonPlantsArray} \x1b[0mthrough \x1b[32m${message.author.tag} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-			serverData = await serverModel
-				.findOneAndUpdate(
-					{ serverId: message.guild.id },
-					{ $set: { uncommonPlantsArray: serverDataUncommonPlantsArray } },
-					{ new: true },
-				)
-				.catch(async (error) => {
-					return await errorHandling.output(message, error);
-				});
+			for (const [speciesName] of maps.uncommonPlantMap) {
+
+				if (!serverUncommonPlantMap.has(speciesName)) {
+
+					serverUncommonPlantMap.set(speciesName, 0);
+				}
+			}
+
+			serverData = await serverModel.findOneAndUpdate(
+				{ serverId: message.guild.id },
+				{ $set: { 'inventoryObject.uncommonPlants': serverUncommonPlantMap } },
+			);
 		}
 
-		if (arrays.rarePlantNamesArray.length > serverData.rarePlantsArray.length) {
+		if (maps.rarePlantMap.size > Object.keys(serverData.inventoryObject.rarePlants).length) {
 
-			const serverDataRarePlantsArray = [...serverData.rarePlantsArray].concat(new Array(arrays.rarePlantNamesArray.length - serverData.rarePlantsArray.length).fill(0));
+			const serverRarePlantMap = new Map(JSON.parse(JSON.stringify([...serverData.inventoryObject.rarePlants])));
 
-			console.log(`\x1b[32m\x1b[0m${message.guild.name} (${message.guild.id}): rarePlantsArray changed from \x1b[33m${serverData.rarePlantsArray} \x1b[0mto \x1b[33m${serverDataRarePlantsArray} \x1b[0mthrough \x1b[32m${message.author.tag} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-			serverData = await serverModel
-				.findOneAndUpdate(
-					{ serverId: message.guild.id },
-					{ $set: { rarePlantsArray: serverDataRarePlantsArray } },
-					{ new: true },
-				)
-				.catch(async (error) => {
-					return await errorHandling.output(message, error);
-				});
+			for (const [speciesName] of maps.rarePlantMap) {
+
+				if (!serverRarePlantMap.has(speciesName)) {
+
+					serverRarePlantMap.set(speciesName, 0);
+				}
+			}
+
+			serverData = await serverModel.findOneAndUpdate(
+				{ serverId: message.guild.id },
+				{ $set: { 'inventoryObject.rarePlants': serverRarePlantMap } },
+			);
 		}
 
 		let pingRuins = false;
@@ -141,15 +158,14 @@ module.exports = {
 					}],
 				})
 				.catch(async (error) => {
-					if (error.httpStatus == 404) {
-						console.log('Message already deleted');
-					}
-					else {
-						return await errorHandling.output(message, error);
+					if (error.httpStatus !== 404) {
+						throw new Error(error);
 					}
 				});
 
-			return console.log(`\x1b[32m\x1b[0m${message.author.tag} unsuccessfully tried to execute \x1b[33m${message.content} \x1b[0min \x1b[32m${message.guild.name} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
+			console.log(`\x1b[32m${message.author.tag}\x1b[0m unsuccessfully tried to execute \x1b[33m${message.content} \x1b[0min \x1b[32m${message.guild.name} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
+
+			return;
 		}
 
 		if (command == 'say') {
@@ -184,59 +200,13 @@ module.exports = {
 
 		try {
 
-			console.log(`\x1b[32m\x1b[0m${message.author.tag} successfully executed \x1b[33m${message.content} \x1b[0min \x1b[32m${message.guild.name} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-
+			console.log(`\x1b[32m${message.author.tag}\x1b[0m successfully executed \x1b[33m${message.content} \x1b[0min \x1b[32m${message.guild.name} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
 
 			if (usersActiveCommandsAmountMap.has(message.author.id) == false) {
 
 				usersActiveCommandsAmountMap.set(message.author.id, { activeCommands: 0 });
 			}
-			usersActiveCommandsAmountMap.get(message.author.id).activeCommands += 1;
-
-
-			if (serverData.activeUsersArray.includes(message.author.id)) {
-
-				clearTimeout(serversActiveUsersCooldownTimeoutArray[message.author.id]);
-			}
-			else {
-
-				console.log(`\x1b[32m\x1b[0m${message.guild.name} (${message.guild.id}): activeUsersArray changed from \x1b[33m[${serverData.activeUsersArray}] \x1b[0mto \x1b[33m[${[...serverData.activeUsersArray, message.author.id]}] \x1b[0mthrough \x1b[32m${message.author.tag} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-				serverData = await serverModel
-					.findOneAndUpdate(
-						{ serverId: message.guild.id },
-						{ $push: { activeUsersArray: message.author.id } },
-						{ new: true },
-					)
-					.catch(async (error) => {
-						return await errorHandling.output(message, error);
-					});
-			}
-
-			serversActiveUsersCooldownTimeoutArray[message.author.id] = setTimeout(async function() {
-
-				serverData = await serverModel
-					.findOne({
-						serverId: message.guild.id,
-					})
-					.catch(async (error) => {
-						return await errorHandling.output(message, error);
-					});
-
-				const userIndex = serverData.activeUsersArray.indexOf(message.author.id);
-				serverData.activeUsersArray.splice(userIndex, 1);
-
-				console.log(`\x1b[32m\x1b[0m${message.guild.name} (${message.guild.id}): activeUsersArray changed from \x1b[33m[${[...serverData.activeUsersArray, message.author.id]}] \x1b[0mto \x1b[33m[${serverData.activeUsersArray}] \x1b[0mthrough \x1b[32m${message.author.tag} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-				serverData = await serverModel
-					.findOneAndUpdate(
-						{ serverId: message.guild.id },
-						{ $set: { activeUsersArray: serverData.activeUsersArray } },
-						{ new: true },
-					)
-					.catch(async (error) => {
-						return await errorHandling.output(message, error);
-					});
-			}, 120000);
-
+			usersActiveCommandsAmountMap.get(message.author.id).activeCommands++;
 
 			await message.channel
 				.sendTyping()
@@ -252,31 +222,23 @@ module.exports = {
 
 					if (profileData && usersActiveCommandsAmountMap.get(message.author.id).activeCommands <= 0) {
 
-						profileData = await profileModel
-							.findOne({
-								userId: message.author.id,
-								serverId: message.guild.id,
-							}).catch(async (error) => {
-								return await errorHandling.output(message, error);
-							});
+						profileData = await profileModel.findOne({
+							userId: message.author.id,
+							serverId: message.guild.id,
+						});
 
 						automaticCooldownTimeoutArray[message.author.id] = setTimeout(async function() {
 
-							console.log(`\x1b[32m\x1b[0m${message.author.tag} (${message.author.id}): hasCooldown changed from \x1b[33m${profileData.hasCooldown} \x1b[0mto \x1b[33mfalse \x1b[0min \x1b[32m${message.guild.name} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-							profileData = await profileModel
-								.findOneAndUpdate(
-									{ userId: message.author.id, serverId: message.guild.id },
-									{ $set: { hasCooldown: false } },
-									{ new: true },
-								)
-								.catch(async (error) => {
-									await errorHandling.output(message, error);
-								});
+							profileData = await profileModel.findOneAndUpdate(
+								{ userId: message.author.id, serverId: message.guild.id },
+								{ $set: { hasCooldown: false } },
+							);
 						}, 3000);
 					}
 				})
-				.catch(() => {
+				.catch(async (error) => {
 					--usersActiveCommandsAmountMap.get(message.author.id).activeCommands;
+					await errorHandling.output(message, error);
 				});
 		}
 		catch (error) {
@@ -291,14 +253,10 @@ module.exports = {
 
 		async function automaticRestingTimeoutFunction() {
 
-			profileData = await profileModel
-				.findOne({
-					userId: message.author.id,
-					serverId: message.guild.id,
-				})
-				.catch(async (error) => {
-					return await errorHandling.output(message, error);
-				});
+			profileData = await profileModel.findOne({
+				userId: message.author.id,
+				serverId: message.guild.id,
+			});
 
 			if (profileData && profileData.isResting == false && profileData.energy < profileData.maxEnergy) {
 
@@ -308,16 +266,10 @@ module.exports = {
 
 						automaticCooldownTimeoutArray[message.author.id] = setTimeout(async function() {
 
-							console.log(`\x1b[32m\x1b[0m${message.author.tag} (${message.author.id}): hasCooldown changed from \x1b[33m${profileData.hasCooldown} \x1b[0mto \x1b[33mfalse \x1b[0min \x1b[32m${message.guild.name} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-							profileData = await profileModel
-								.findOneAndUpdate(
-									{ userId: message.author.id, serverId: message.guild.id },
-									{ $set: { hasCooldown: false } },
-									{ new: true },
-								)
-								.catch(async (error) => {
-									await errorHandling.output(message, error);
-								});
+							profileData = await profileModel.findOneAndUpdate(
+								{ userId: message.author.id, serverId: message.guild.id },
+								{ $set: { hasCooldown: false } },
+							);
 						}, 3000);
 					})
 					.catch(async (error) => {

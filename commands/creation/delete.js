@@ -1,5 +1,5 @@
 const config = require('../../config.json');
-const profileModel = require('../../models/profileSchema');
+const profileModel = require('../../models/profileModel');
 
 module.exports = {
 	name: 'delete',
@@ -17,10 +17,7 @@ module.exports = {
 					}],
 				})
 				.catch((error) => {
-					if (error.httpStatus == 404) {
-						console.log('Message already deleted');
-					}
-					else {
+					if (error.httpStatus !== 404) {
 						throw new Error(error);
 					}
 				});
@@ -51,10 +48,7 @@ module.exports = {
 				}],
 			})
 			.catch((error) => {
-				if (error.httpStatus == 404) {
-					console.log('Message already deleted');
-				}
-				else {
+				if (error.httpStatus !== 404) {
 					throw new Error(error);
 				}
 			});
@@ -76,10 +70,7 @@ module.exports = {
 					components: [],
 				})
 				.catch((error) => {
-					if (error.httpStatus == 404) {
-						console.log('Message already deleted');
-					}
-					else {
+					if (error.httpStatus !== 404) {
 						throw new Error(error);
 					}
 				});
@@ -113,10 +104,7 @@ module.exports = {
 						components: [],
 					})
 					.catch((error) => {
-						if (error.httpStatus == 404) {
-							console.log('Message already deleted');
-						}
-						else {
+						if (error.httpStatus !== 404) {
 							throw new Error(error);
 						}
 					});
@@ -126,17 +114,10 @@ module.exports = {
 
 			if (interaction.customId == 'delete-confirm') {
 
-				await profileModel
-					.findOneAndDelete({
-						userId: message.author.id,
-						serverId: message.guild.id,
-					})
-					.then((value) => {
-						console.log('Deleted User: ' + value);
-					})
-					.catch((error) => {
-						throw new Error(error);
-					});
+				await profileModel.findOneAndDelete({
+					userId: message.author.id,
+					serverId: message.guild.id,
+				});
 
 				return await interaction.message
 					.edit({
@@ -148,10 +129,7 @@ module.exports = {
 						components: [],
 					})
 					.catch((error) => {
-						if (error.httpStatus == 404) {
-							console.log('Message already deleted');
-						}
-						else {
+						if (error.httpStatus !== 404) {
 							throw new Error(error);
 						}
 					});
@@ -169,10 +147,7 @@ module.exports = {
 						components: [],
 					})
 					.catch((error) => {
-						if (error.httpStatus == 404) {
-							console.log('Message already deleted');
-						}
-						else {
+						if (error.httpStatus !== 404) {
 							throw new Error(error);
 						}
 					});

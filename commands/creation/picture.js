@@ -1,5 +1,5 @@
 const config = require('../../config.json');
-const profileModel = require('../../models/profileSchema');
+const profileModel = require('../../models/profileModel');
 const checkAccountCompletion = require('../../utils/checkAccountCompletion');
 const startCooldown = require('../../utils/startCooldown');
 
@@ -17,16 +17,10 @@ module.exports = {
 
 		if (!argumentsArray.length && message.attachments.size <= 0) {
 
-			console.log(`\x1b[32m\x1b[0m${message.author.tag} (${message.author.id}): avatarURL changed from \x1b[33m${profileData.avatarURL} \x1b[0mto \x1b[33m${message.author.avatarURL()} \x1b[0min \x1b[32m${message.guild.name} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-			await profileModel
-				.findOneAndUpdate(
-					{ userId: message.author.id, serverId: message.guild.id },
-					{ $set: { avatarURL: message.author.avatarURL() } },
-					{ new: true },
-				)
-				.catch((error) => {
-					throw new Error(error);
-				});
+			await profileModel.findOneAndUpdate(
+				{ userId: message.author.id, serverId: message.guild.id },
+				{ $set: { avatarURL: message.author.avatarURL() } },
+			);
 
 			return await message
 				.reply({
@@ -38,10 +32,7 @@ module.exports = {
 					}],
 				})
 				.catch((error) => {
-					if (error.httpStatus == 404) {
-						console.log('Message already deleted');
-					}
-					else {
+					if (error.httpStatus !== 404) {
 						throw new Error(error);
 					}
 				});
@@ -58,10 +49,7 @@ module.exports = {
 					}],
 				})
 				.catch((error) => {
-					if (error.httpStatus == 404) {
-						console.log('Message already deleted');
-					}
-					else {
+					if (error.httpStatus !== 404) {
 						throw new Error(error);
 					}
 				});
@@ -80,25 +68,16 @@ module.exports = {
 					}],
 				})
 				.catch((error) => {
-					if (error.httpStatus == 404) {
-						console.log('Message already deleted');
-					}
-					else {
+					if (error.httpStatus !== 404) {
 						throw new Error(error);
 					}
 				});
 		}
 
-		console.log(`\x1b[32m\x1b[0m${message.author.tag} (${message.author.id}): avatarURL changed from \x1b[33m${profileData.avatarURL} \x1b[0mto \x1b[33m${ImageLink} \x1b[0min \x1b[32m${message.guild.name} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-		await profileModel
-			.findOneAndUpdate(
-				{ userId: message.author.id, serverId: message.guild.id },
-				{ $set: { avatarURL: ImageLink } },
-				{ new: true },
-			)
-			.catch((error) => {
-				throw new Error(error);
-			});
+		await profileModel.findOneAndUpdate(
+			{ userId: message.author.id, serverId: message.guild.id },
+			{ $set: { avatarURL: ImageLink } },
+		);
 
 		return await message
 			.reply({
@@ -110,10 +89,7 @@ module.exports = {
 				}],
 			})
 			.catch((error) => {
-				if (error.httpStatus == 404) {
-					console.log('Message already deleted');
-				}
-				else {
+				if (error.httpStatus !== 404) {
 					throw new Error(error);
 				}
 			});

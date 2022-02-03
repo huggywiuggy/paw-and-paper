@@ -1,5 +1,5 @@
 const config = require('../../config.json');
-const profileModel = require('../../models/profileSchema');
+const profileModel = require('../../models/profileModel');
 const checkAccountCompletion = require('../../utils/checkAccountCompletion');
 const startCooldown = require('../../utils/startCooldown');
 
@@ -26,27 +26,17 @@ module.exports = {
 					}],
 				})
 				.catch((error) => {
-					if (error.httpStatus == 404) {
-						console.log('Message already deleted');
-					}
-					else {
+					if (error.httpStatus !== 404) {
 						throw new Error(error);
 					}
 				});
 		}
 
 		const description = argumentsArray.join(' ');
-
-		console.log(`\x1b[32m\x1b[0m${message.author.tag} (${message.author.id}): description changed from \x1b[33m${profileData.description} \x1b[0mto \x1b[33m${description} \x1b[0min \x1b[32m${message.guild.name} \x1b[0mat \x1b[3m${new Date().toLocaleString()} \x1b[0m`);
-		await profileModel
-			.findOneAndUpdate(
-				{ userId: message.author.id, serverId: message.guild.id },
-				{ $set: { description: `${description}` } },
-				{ new: true },
-			)
-			.catch((error) => {
-				throw new Error(error);
-			});
+		await profileModel.findOneAndUpdate(
+			{ userId: message.author.id, serverId: message.guild.id },
+			{ $set: { description: `${description}` } },
+		);
 
 		return await message
 			.reply({
@@ -58,10 +48,7 @@ module.exports = {
 				}],
 			})
 			.catch((error) => {
-				if (error.httpStatus == 404) {
-					console.log('Message already deleted');
-				}
-				else {
+				if (error.httpStatus !== 404) {
 					throw new Error(error);
 				}
 			});

@@ -1,4 +1,4 @@
-const profileModel = require('../../models/profileSchema');
+const profileModel = require('../../models/profileModel');
 const checkAccountCompletion = require('../../utils/checkAccountCompletion');
 const checkValidity = require('../../utils/checkValidity');
 const startCooldown = require('../../utils/startCooldown');
@@ -13,7 +13,7 @@ module.exports = {
 			return;
 		}
 
-		if (await checkValidity.hasCooldown(message, profileData, module.exports.name)) {
+		if (await checkValidity.hasCooldown(message, profileData, [module.exports.name].concat(module.exports.aliases))) {
 
 			return;
 		}
@@ -37,21 +37,10 @@ module.exports = {
 
 		if (message.mentions.users.size) {
 
-			try {
-
-				profileData = await profileModel
-					.findOne({
-						userId: message.mentions.users.first().id,
-						serverId: message.guild.id,
-					})
-					.catch((error) => {
-						throw new Error(error);
-					});
-			}
-			catch (err) {
-
-				console.log(err);
-			}
+			profileData = await profileModel.findOne({
+				userId: message.mentions.users.first().id,
+				serverId: message.guild.id,
+			});
 
 			if (!profileData || profileData.species === '') {
 
@@ -64,10 +53,7 @@ module.exports = {
 						}],
 					})
 					.catch((error) => {
-						if (error.httpStatus == 404) {
-							console.log('Message already deleted');
-						}
-						else {
+						if (error.httpStatus !== 404) {
 							throw new Error(error);
 						}
 					});
@@ -84,14 +70,14 @@ module.exports = {
 			}];
 		}
 
-		let injuryText = (profileData.injuryArray.every(item => item == 0)) ? 'none' : '';
-		const injuryNameArray = ['Wound', 'Infection', 'Cold', 'Sprain', 'Poison'];
+		let injuryText = (Object.values(profileData.injuryObject).every(item => item == 0)) ? 'none' : '';
 
-		for (let i = 0; i < profileData.injuryArray.length; i++) {
+		for (const [injuryKey, injuryAmount] of Object.entries(profileData.injuryObject)) {
 
-			if (profileData.injuryArray[i] > 0) {
+			if (injuryAmount > 0) {
 
-				injuryText += `${profileData.injuryArray[i]} ${injuryNameArray[i]}${(profileData.injuryArray[i] > 1) ? 's' : ''}\n`;
+				const injuryName = injuryKey.charAt(0).toUpperCase() + injuryKey.slice(1);
+				injuryText += `${injuryAmount} ${(injuryAmount > 1) ? injuryName.slice(0, -1) : injuryName}\n`;
 			}
 		}
 
@@ -124,10 +110,7 @@ module.exports = {
 				components: components,
 			})
 			.catch((error) => {
-				if (error.httpStatus == 404) {
-					console.log('Message already deleted');
-				}
-				else {
+				if (error.httpStatus !== 404) {
 					throw new Error(error);
 				}
 			});

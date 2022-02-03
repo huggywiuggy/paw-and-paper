@@ -16,13 +16,20 @@ module.exports = {
 					}],
 				})
 				.catch((error) => {
-					if (error.httpStatus == 404) {
-						console.log('Message already deleted');
-					}
-					else {
+					if (error.httpStatus !== 404) {
 						throw new Error(error);
 					}
 				});
+		}
+
+		let attachmentURLs = '';
+
+		if (message.attachments) {
+
+			for (const file of message.attachments) {
+
+				attachmentURLs += `${file.url}\n`;
+			}
 		}
 
 		const octokit = new Octokit({
@@ -36,7 +43,7 @@ module.exports = {
 				owner: 'MaksiRose',
 				repo: 'paw-and-paper',
 				title: argumentsArray.join(' '),
-				body: `Created by: ${message.author.tag} (${message.author.id})\n[Link to original Discord message](https://discord.com/channels/${message.guild.id}/${message.channel.id}/${message.id})`,
+				body: `Created by: ${message.author.tag} (${message.author.id})\n[Link to original Discord message](https://discord.com/channels/${message.guild.id}/${message.channel.id}/${message.id})\n${attachmentURLs}`,
 			})
 			.catch((error) => {
 				throw new Error(error);
@@ -79,10 +86,7 @@ module.exports = {
 				}],
 			})
 			.catch((error) => {
-				if (error.httpStatus == 404) {
-					console.log('Message already deleted');
-				}
-				else {
+				if (error.httpStatus !== 404) {
 					throw new Error(error);
 				}
 			});
